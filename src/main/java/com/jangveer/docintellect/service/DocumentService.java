@@ -58,7 +58,7 @@ public class DocumentService {
         this.operationCoordinator = operationCoordinator;
     }
 
-    public DocumentResponse upload(MultipartFile file) {
+    public DocumentResponse upload(MultipartFile file, UUID userId) {
         validate(file);
         String storagePath;
         try {
@@ -71,7 +71,8 @@ public class DocumentService {
                 file.getOriginalFilename(),
                 "application/pdf",
                 file.getSize(),
-                storagePath
+                storagePath,
+                userId
         );
         try {
             metadata = repository.save(metadata);
@@ -94,7 +95,7 @@ public class DocumentService {
         return DocumentResponse.from(metadata);
     }
 
-    public BatchUploadResponse uploadBatch(List<MultipartFile> files) {
+    public BatchUploadResponse uploadBatch(List<MultipartFile> files, UUID userId) {
         if (files == null || files.isEmpty() || files.size() > documentProperties.maxBatchFiles()) {
             throw new InvalidDocumentBatchException(
                     "Upload between 1 and " + documentProperties.maxBatchFiles() + " PDF files per batch."
@@ -102,15 +103,15 @@ public class DocumentService {
         }
 
         List<BatchUploadItemResult> results = files.stream()
-                .map(this::uploadBatchItem)
+                .map(file -> uploadBatchItem(file, userId))
                 .toList();
         return new BatchUploadResponse(results);
     }
 
-    private BatchUploadItemResult uploadBatchItem(MultipartFile file) {
+    private BatchUploadItemResult uploadBatchItem(MultipartFile file, UUID userId) {
         String fileName = file == null ? null : file.getOriginalFilename();
         try {
-            return BatchUploadItemResult.success(upload(file));
+            return BatchUploadItemResult.success(upload(file, userId));
         } catch (InvalidPdfException | DocumentStorageException | DocumentIndexingException exception) {
             return BatchUploadItemResult.failure(fileName, exception.getMessage());
         } catch (DataAccessException exception) {
@@ -119,20 +120,23 @@ public class DocumentService {
         }
     }
 
-    public DocumentResponse get(UUID id) {
-        return DocumentResponse.from(repository.findById(id)
+    public DocumentResponse get(UUID id, UUID userId) {
+        return DocumentResponse.from(repository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new DocumentNotFoundException(id)));
     }
 
-    public List<DocumentResponse> list() {
-        return repository.findAll().stream().map(DocumentResponse::from).toList();
+    public List<DocumentResponse> list(UUID userId) {
+        return repository.findAllByUserIdOrderByUploadedAtDesc(userId)
+                .stream()
+                .map(DocumentResponse::from)
+                .toList();
     }
 
-    public void delete(UUID id) {
-        operationCoordinator.execute(id, () -> deleteDocument(id));
+    public void delete(UUID id, UUID userId) {
+        operationCoordinator.execute(id, () -> deleteDocument(id, userId));
     }
 
-    public BatchDeleteResponse deleteBatch(List<UUID> ids) {
+    public BatchDeleteResponse deleteBatch(List<UUID> ids, UUID userId) {
         if (ids == null || ids.isEmpty() || ids.size() > MAX_BATCH_DELETE_IDS
                 || ids.stream().anyMatch(id -> id == null)) {
             throw new InvalidDocumentBatchException(
@@ -141,17 +145,17 @@ public class DocumentService {
         }
 
         List<BatchDeleteItemResult> results = ids.stream()
-                .map(this::deleteBatchItem)
+                .map(id -> deleteBatchItem(id, userId))
                 .toList();
         return new BatchDeleteResponse(results);
     }
 
-    private BatchDeleteItemResult deleteBatchItem(UUID id) {
+    private BatchDeleteItemResult deleteBatchItem(UUID id, UUID userId) {
         String fileName = null;
         try {
-            DocumentResponse document = get(id);
+            DocumentResponse document = get(id, userId);
             fileName = document.fileName();
-            delete(id);
+            delete(id, userId);
             return BatchDeleteItemResult.success(id, fileName);
         } catch (DocumentNotFoundException exception) {
             return BatchDeleteItemResult.failure(id, fileName, exception.getMessage());
@@ -163,15 +167,23 @@ public class DocumentService {
         }
     }
 
-    private void deleteDocument(UUID id) {
-        DocumentMetadata metadata = repository.findById(id)
+    private void deleteDocument(UUID id, UUID userId) {
+        DocumentMetadata metadata = repository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new DocumentNotFoundException(id));
 
         try {
             vectorStore.delete(new Filter.Expression(
-                    Filter.ExpressionType.EQ,
-                    new Filter.Key("documentId"),
-                    new Filter.Value(id.toString())
+                    Filter.ExpressionType.AND,
+                    new Filter.Expression(
+                            Filter.ExpressionType.EQ,
+                            new Filter.Key("documentId"),
+                            new Filter.Value(id.toString())
+                    ),
+                    new Filter.Expression(
+                            Filter.ExpressionType.EQ,
+                            new Filter.Key("userId"),
+                            new Filter.Value(userId.toString())
+                    )
             ));
         } catch (RuntimeException exception) {
             throw new DocumentDeletionException("Unable to delete the document's indexed content.", exception);

@@ -22,8 +22,5 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Run Maven tests
-        run: ./mvnw test
-
-      - name: Package application
-        run: ./mvnw -DskipTests package
+      - name: Run tests and package application
+        run: ./mvnw verify

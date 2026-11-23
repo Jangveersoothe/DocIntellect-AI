@@ -80,6 +80,7 @@ public class DocumentIngestionService {
                                 chunk.text(),
                                 Map.of(
                                         "documentId", metadata.getId().toString(),
+                                        "userId", metadata.getUserId().toString(),
                                         "fileName", metadata.getFileName(),
                                         "pageNumber", chunk.pageNumber(),
                                         "chunkIndex", chunk.chunkIndex(),

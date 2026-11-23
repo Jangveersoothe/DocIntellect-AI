@@ -4,6 +4,7 @@ import com.jangveer.docintellect.dto.DocumentResponse;
 import com.jangveer.docintellect.dto.BatchDeleteResponse;
 import com.jangveer.docintellect.dto.BatchUploadResponse;
 import com.jangveer.docintellect.dto.DeleteDocumentsRequest;
+import com.jangveer.docintellect.security.CurrentUser;
 import com.jangveer.docintellect.service.DocumentService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -27,40 +28,42 @@ import java.util.UUID;
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final CurrentUser currentUser;
 
-    public DocumentController(DocumentService documentService) {
+    public DocumentController(DocumentService documentService, CurrentUser currentUser) {
         this.documentService = documentService;
+        this.currentUser = currentUser;
     }
 
     @PostMapping(path = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     public DocumentResponse upload(@RequestParam("file") MultipartFile file) {
-        return documentService.upload(file);
+        return documentService.upload(file, currentUser.id());
     }
 
     @PostMapping(path = "/upload/batch", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public BatchUploadResponse uploadBatch(@RequestParam("files") List<MultipartFile> files) {
-        return documentService.uploadBatch(files);
+        return documentService.uploadBatch(files, currentUser.id());
     }
 
     @GetMapping
     public List<DocumentResponse> list() {
-        return documentService.list();
+        return documentService.list(currentUser.id());
     }
 
     @GetMapping("/{id}")
     public DocumentResponse get(@PathVariable UUID id) {
-        return documentService.get(id);
+        return documentService.get(id, currentUser.id());
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID id) {
-        documentService.delete(id);
+        documentService.delete(id, currentUser.id());
     }
 
     @DeleteMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public BatchDeleteResponse deleteBatch(@Valid @RequestBody DeleteDocumentsRequest request) {
-        return documentService.deleteBatch(request.ids());
+        return documentService.deleteBatch(request.ids(), currentUser.id());
     }
 }

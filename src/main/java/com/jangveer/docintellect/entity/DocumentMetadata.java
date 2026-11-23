@@ -37,6 +37,9 @@ public class DocumentMetadata {
     @Column(nullable = false, unique = true)
     private String storagePath;
 
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private DocumentStatus status;
@@ -47,12 +50,13 @@ public class DocumentMetadata {
     protected DocumentMetadata() {
     }
 
-    public DocumentMetadata(String fileName, String contentType, long fileSize, String storagePath) {
+    public DocumentMetadata(String fileName, String contentType, long fileSize, String storagePath, UUID userId) {
         this.id = UUID.randomUUID();
         this.fileName = fileName;
         this.contentType = contentType;
         this.fileSize = fileSize;
         this.storagePath = storagePath;
+        this.userId = userId;
         this.status = DocumentStatus.UPLOADED;
     }
 
@@ -83,6 +87,10 @@ public class DocumentMetadata {
         return storagePath;
     }
 
+    public UUID getUserId() {
+        return userId;
+    }
+
     public DocumentStatus getStatus() {
         return status;
     }
@@ -93,5 +101,9 @@ public class DocumentMetadata {
 
     public void setStatus(DocumentStatus status) {
         this.status = status;
+    }
+
+    public void setUserId(UUID userId) {
+        this.userId = userId;
     }
 }

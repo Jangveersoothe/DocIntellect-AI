@@ -32,6 +32,8 @@ import static org.mockito.Mockito.when;
 
 class DocumentServiceTest {
 
+    private static final UUID USER_ID = UUID.randomUUID();
+
     @Test
     void storesValidPdfAndStartsIngestion() throws IOException {
         DocumentMetadataRepository repository = mock(DocumentMetadataRepository.class);
@@ -56,7 +58,7 @@ class DocumentServiceTest {
                 "%PDF-1.7\ntest".getBytes()
         );
 
-        DocumentResponse response = service.upload(file);
+        DocumentResponse response = service.upload(file, USER_ID);
 
         assertEquals("policy.pdf", response.fileName());
         verify(storage).store(file);
@@ -82,7 +84,7 @@ class DocumentServiceTest {
                 "%PDF-1.7\ntest".getBytes()
         );
 
-        assertThrows(InvalidPdfException.class, () -> service.upload(file));
+        assertThrows(InvalidPdfException.class, () -> service.upload(file, USER_ID));
     }
 
     @Test
@@ -114,7 +116,7 @@ class DocumentServiceTest {
                 "not a pdf".getBytes()
         );
 
-        BatchUploadResponse response = service.uploadBatch(List.of(validFile, invalidFile));
+        BatchUploadResponse response = service.uploadBatch(List.of(validFile, invalidFile), USER_ID);
 
         assertEquals(2, response.results().size());
         assertTrue(response.results().get(0).successful());
@@ -140,7 +142,7 @@ class DocumentServiceTest {
                 () -> service.uploadBatch(List.of(
                         new MockMultipartFile("files", "one.pdf", "application/pdf", new byte[]{1}),
                         new MockMultipartFile("files", "two.pdf", "application/pdf", new byte[]{1})
-                ))
+                ), USER_ID)
         );
     }
 
@@ -153,9 +155,10 @@ class DocumentServiceTest {
                 "policy.pdf",
                 "application/pdf",
                 100,
-                "stored-policy.pdf"
+                "stored-policy.pdf",
+                USER_ID
         );
-        when(repository.findById(metadata.getId())).thenReturn(Optional.of(metadata));
+        when(repository.findByIdAndUserId(metadata.getId(), USER_ID)).thenReturn(Optional.of(metadata));
 
         DocumentService service = new DocumentService(
                 repository,
@@ -166,14 +169,28 @@ class DocumentServiceTest {
                 new DocumentOperationCoordinator()
         );
 
-        service.delete(metadata.getId());
+        service.delete(metadata.getId(), USER_ID);
 
         org.mockito.ArgumentCaptor<Filter.Expression> filterCaptor =
                 org.mockito.ArgumentCaptor.forClass(Filter.Expression.class);
         verify(vectorStore).delete(filterCaptor.capture());
-        assertEquals(Filter.ExpressionType.EQ, filterCaptor.getValue().type());
-        assertEquals(new Filter.Key("documentId"), filterCaptor.getValue().left());
-        assertEquals(new Filter.Value(metadata.getId().toString()), filterCaptor.getValue().right());
+        assertEquals(Filter.ExpressionType.AND, filterCaptor.getValue().type());
+        assertEquals(
+                new Filter.Expression(
+                        Filter.ExpressionType.EQ,
+                        new Filter.Key("documentId"),
+                        new Filter.Value(metadata.getId().toString())
+                ),
+                filterCaptor.getValue().left()
+        );
+        assertEquals(
+                new Filter.Expression(
+                        Filter.ExpressionType.EQ,
+                        new Filter.Key("userId"),
+                        new Filter.Value(USER_ID.toString())
+                ),
+                filterCaptor.getValue().right()
+        );
         verify(storage).delete("stored-policy.pdf");
         verify(repository).delete(metadata);
     }
@@ -184,7 +201,7 @@ class DocumentServiceTest {
         LocalFileStorageService storage = mock(LocalFileStorageService.class);
         VectorStore vectorStore = mock(VectorStore.class);
         UUID id = UUID.randomUUID();
-        when(repository.findById(id)).thenReturn(Optional.empty());
+        when(repository.findByIdAndUserId(id, USER_ID)).thenReturn(Optional.empty());
 
         DocumentService service = new DocumentService(
                 repository,
@@ -195,7 +212,7 @@ class DocumentServiceTest {
                 new DocumentOperationCoordinator()
         );
 
-        assertThrows(DocumentNotFoundException.class, () -> service.delete(id));
+        assertThrows(DocumentNotFoundException.class, () -> service.delete(id, USER_ID));
 
         verifyNoInteractions(storage, vectorStore);
         verify(repository, never()).delete(any(DocumentMetadata.class));
@@ -210,11 +227,12 @@ class DocumentServiceTest {
                 "policy.pdf",
                 "application/pdf",
                 100,
-                "stored-policy.pdf"
+                "stored-policy.pdf",
+                USER_ID
         );
         UUID missingId = UUID.randomUUID();
-        when(repository.findById(metadata.getId())).thenReturn(Optional.of(metadata));
-        when(repository.findById(missingId)).thenReturn(Optional.empty());
+        when(repository.findByIdAndUserId(metadata.getId(), USER_ID)).thenReturn(Optional.of(metadata));
+        when(repository.findByIdAndUserId(missingId, USER_ID)).thenReturn(Optional.empty());
         DocumentService service = new DocumentService(
                 repository,
                 storage,
@@ -224,7 +242,7 @@ class DocumentServiceTest {
                 new DocumentOperationCoordinator()
         );
 
-        BatchDeleteResponse response = service.deleteBatch(List.of(metadata.getId(), missingId));
+        BatchDeleteResponse response = service.deleteBatch(List.of(metadata.getId(), missingId), USER_ID);
 
         assertEquals(2, response.results().size());
         assertTrue(response.results().get(0).successful());

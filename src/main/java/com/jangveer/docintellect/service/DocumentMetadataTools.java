@@ -3,6 +3,7 @@ package com.jangveer.docintellect.service;
 import com.jangveer.docintellect.dto.DocumentResponse;
 import com.jangveer.docintellect.entity.DocumentStatus;
 import com.jangveer.docintellect.repository.DocumentMetadataRepository;
+import com.jangveer.docintellect.security.CurrentUser;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
@@ -14,9 +15,11 @@ import java.util.Locale;
 public class DocumentMetadataTools {
 
     private final DocumentMetadataRepository repository;
+    private final CurrentUser currentUser;
 
-    public DocumentMetadataTools(DocumentMetadataRepository repository) {
+    public DocumentMetadataTools(DocumentMetadataRepository repository, CurrentUser currentUser) {
         this.repository = repository;
+        this.currentUser = currentUser;
     }
 
     @Tool(description = "Find up to ten most recently uploaded documents by status.")
@@ -24,7 +27,7 @@ public class DocumentMetadataTools {
             @ToolParam(description = "Document status: UPLOADED, INDEXED, or FAILED") String status
     ) {
         DocumentStatus documentStatus = DocumentStatus.valueOf(status.toUpperCase(Locale.ROOT));
-        return repository.findTop10ByStatusOrderByUploadedAtDesc(documentStatus)
+        return repository.findTop10ByUserIdAndStatusOrderByUploadedAtDesc(currentUser.id(), documentStatus)
                 .stream()
                 .map(DocumentResponse::from)
                 .toList();

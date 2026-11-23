@@ -9,6 +9,7 @@ import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -34,9 +35,9 @@ public class DocumentAiService {
         this.metadataTools = metadataTools;
     }
 
-    public AskResponse ask(String query) {
+    public AskResponse ask(String query, UUID userId) {
         List<Document> matches = vectorStore.similaritySearch(
-                SearchRequest.builder().query(query).topK(ragProperties.topK()).build()
+                searchRequest(query, userId)
         );
         String context = matches.stream()
                 .map(document -> "[documentId=" + document.getMetadata().get("documentId")
@@ -75,11 +76,11 @@ public class DocumentAiService {
         return new AskResponse(answer, sourceIds, citations);
     }
 
-    public ComplianceAnalysisResult analyzeCompliance(String query) {
+    public ComplianceAnalysisResult analyzeCompliance(String query, UUID userId) {
         BeanOutputConverter<ComplianceAnalysisResult> converter =
                 new BeanOutputConverter<>(ComplianceAnalysisResult.class);
         List<Document> matches = vectorStore.similaritySearch(
-                SearchRequest.builder().query(query).topK(ragProperties.topK()).build()
+                searchRequest(query, userId)
         );
         String context = matches.stream()
                 .map(Document::getText)
@@ -95,5 +96,17 @@ public class DocumentAiService {
                 .call()
                 .content();
         return converter.convert(response);
+    }
+
+    private SearchRequest searchRequest(String query, UUID userId) {
+        return SearchRequest.builder()
+                .query(query)
+                .topK(ragProperties.topK())
+                .filterExpression(new Filter.Expression(
+                        Filter.ExpressionType.EQ,
+                        new Filter.Key("userId"),
+                        new Filter.Value(userId.toString())
+                ))
+                .build();
     }
 }

@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -26,6 +27,30 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         return problem(HttpStatus.BAD_REQUEST, "Invalid document batch", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(EmailAlreadyRegisteredException.class)
+    ResponseEntity<ProblemDetail> handleEmailAlreadyRegistered(
+            EmailAlreadyRegisteredException exception,
+            HttpServletRequest request
+    ) {
+        return problem(HttpStatus.CONFLICT, "Email already registered", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(InvalidRegistrationException.class)
+    ResponseEntity<ProblemDetail> handleInvalidRegistration(
+            InvalidRegistrationException exception,
+            HttpServletRequest request
+    ) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid registration", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    ResponseEntity<ProblemDetail> handleBadCredentials(
+            BadCredentialsException exception,
+            HttpServletRequest request
+    ) {
+        return problem(HttpStatus.UNAUTHORIZED, "Invalid credentials", "Email or password is incorrect.", request);
     }
 
     @ExceptionHandler(DocumentNotFoundException.class)

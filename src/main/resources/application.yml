@@ -50,6 +50,13 @@ app:
   documents:
     max-file-size-bytes: 10485760
     max-batch-files: 10
+  security:
+    jwt:
+      secret: ${JWT_SECRET}
+      ttl-seconds: ${JWT_TTL_SECONDS:3600}
+    bootstrap-owner:
+      email: ${BOOTSTRAP_ADMIN_EMAIL:}
+      password: ${BOOTSTRAP_ADMIN_PASSWORD:}
   rag:
     chunk-size-tokens: 500
     chunk-overlap-tokens: 50
